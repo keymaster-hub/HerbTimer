@@ -4,6 +4,14 @@
 
 The addon saves the location and loot time of gathered items and displays them directly on the World Map.
 
+## Download
+
+Download the latest version from the
+[Releases](../../releases) page.
+
+> **Do not use GitHub's "Download ZIP" button for installation.**
+> It downloads the source repository rather than the addon package.
+
 ## Features
 
 - Track gathering locations automatically from your own loot messages.

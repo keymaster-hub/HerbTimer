@@ -1,0 +1,17 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Frame name="HerbTimerWorldMapPinTemplate"
+           hidden="true"
+           enableMouse="true"
+           mixin="HerbTimerWorldMapPinMixin"
+           virtual="true">
+        <Size x="9" y="9"/>
+        <Layers>
+            <Layer level="OVERLAY">
+                <Texture parentKey="texture" setAllPoints="true"/>
+            </Layer>
+        </Layers>
+        <Scripts>
+            <OnLoad method="OnLoad"/>
+        </Scripts>
+    </Frame>
+</Ui>

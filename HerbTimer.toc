@@ -1,0 +1,8 @@
+## Interface: 20506
+## Title: HerbTimer
+## Notes: Herb respawn tracker
+## Author: Keymaster
+## SavedVariables: HerbTimerDB
+
+HerbTimer.lua
+HerbTimer.xml

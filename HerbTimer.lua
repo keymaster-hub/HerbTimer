@@ -116,8 +116,6 @@ frame:SetScript("OnEvent", function(self, event, msg)
         point.itemName = itemName
         point.itemID = itemID
         point.time = time()
-
-        print("|cff00ff00HerbTimer: Updated existing point.|r")
     else
         point = {
             mapID = mapID,
@@ -129,16 +127,7 @@ frame:SetScript("OnEvent", function(self, event, msg)
         }
 
         table.insert(HerbTimerDB.points, point)
-
-        print("|cff00ff00HerbTimer: New point saved!|r")
     end
-
-    print(string.format(
-        "  %s - %.2f, %.2f",
-        itemName,
-        x * 100,
-        y * 100
-    ))
 end)
 
 local function GetItemDisplayName(itemID)

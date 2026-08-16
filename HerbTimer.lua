@@ -1,6 +1,7 @@
 local addonName = ...
 
 local WorldMapDataProvider
+local UpdateElapsedTicker
 
 local DEFAULT_TRACKED_ITEMS = {
     [22792] = true, -- Nightmare Vine
@@ -34,6 +35,10 @@ local function MigrateDB()
 
     if HerbTimerDB.showIcons == nil then
         HerbTimerDB.showIcons = false
+    end
+
+    if HerbTimerDB.timeMode == nil then
+        HerbTimerDB.timeMode = "clock"
     end
 end
 
@@ -130,6 +135,30 @@ frame:SetScript("OnEvent", function(self, event, msg)
     end
 end)
 
+local function FormatPointTime(pointTime)
+    if not pointTime then
+        return "Unknown"
+    end
+
+    if HerbTimerDB.timeMode == "elapsed" then
+        local elapsed = time() - pointTime
+        if elapsed < 0 then
+            elapsed = 0
+        end
+
+        local hours = math.floor(elapsed / 3600)
+        local minutes = math.floor((elapsed % 3600) / 60)
+
+        if hours > 0 then
+            return string.format("%dh %dm ago", hours, minutes)
+        else
+            return string.format("%dm ago", minutes)
+        end
+    end
+
+    return date("%H:%M", pointTime)
+end
+
 local function GetItemDisplayName(itemID)
     local name = ITEM_NAMES[itemID]
 
@@ -164,8 +193,6 @@ local function PrintPoints()
     print("|cff00ff00HerbTimer points: " .. #HerbTimerDB.points .. "|r")
 
     for i, point in ipairs(HerbTimerDB.points) do
-        local timeText = point.time and date("%H:%M:%S", point.time) or "Unknown"
-
         print(string.format(
             "|cffaaaaaa%d.|r Map %d — %.2f, %.2f — %s (id: %s) — %s",
             i,
@@ -174,7 +201,7 @@ local function PrintPoints()
             point.y * 100,
             point.itemName or "Unknown",
             tostring(point.itemID),
-            timeText
+            FormatPointTime(point.time)
         ))
     end
 end
@@ -186,6 +213,7 @@ local function PrintHelp()
     print("  |cffffcc00/ht remove <itemID>|r — stop tracking an item")
     print("  |cffffcc00/ht items|r — show tracked item IDs")
     print("  |cffffcc00/ht icons|r — toggle item icons on the map (time-only when off)")
+    print("  |cffffcc00/ht time|r — toggle time display: clock time vs. time elapsed")
     print("  |cffffcc00/ht clear|r — clear all saved points")
     print("  |cffffcc00/ht help|r — show this list")
 end
@@ -267,6 +295,19 @@ local function HandleSlashCommand(msg)
         if WorldMapFrame:IsShown() then
             WorldMapDataProvider:RefreshAllData()
         end
+    elseif command == "time" then
+        HerbTimerDB.timeMode = (HerbTimerDB.timeMode == "elapsed") and "clock" or "elapsed"
+
+        print(string.format(
+            "|cff00ff00HerbTimer:|r Time display set to %s.",
+            HerbTimerDB.timeMode == "elapsed" and "elapsed (e.g. \"5m ago\")" or "clock (e.g. \"14:32\")"
+        ))
+
+        if WorldMapFrame:IsShown() then
+            WorldMapDataProvider:RefreshAllData()
+        end
+
+        UpdateElapsedTicker()
     elseif command == "items" then
         PrintTrackedItems()
     else
@@ -389,11 +430,7 @@ function HerbTimerWorldMapPinMixin:OnAcquired(point)
         self.texture:Hide()
     end
 
-    if point.time then
-        self.timeText:SetText(date("%H:%M", point.time))
-    else
-        self.timeText:SetText("")
-    end
+    self.timeText:SetText(point.time and FormatPointTime(point.time) or "")
 
     self:Show()
 end
@@ -414,10 +451,33 @@ refreshFrame:SetScript("OnEvent", function()
     end)
 end)
 
+local elapsedTicker
+
+function UpdateElapsedTicker()
+    local shouldRun = WorldMapFrame:IsShown() and HerbTimerDB.timeMode == "elapsed"
+
+    if shouldRun and not elapsedTicker then
+        elapsedTicker = C_Timer.NewTicker(30, function()
+            if WorldMapFrame:IsShown() then
+                WorldMapDataProvider:RefreshAllData()
+            end
+        end)
+    elseif not shouldRun and elapsedTicker then
+        elapsedTicker:Cancel()
+        elapsedTicker = nil
+    end
+end
+
 WorldMapFrame:HookScript("OnShow", function()
     C_Timer.After(0.1, function()
         WorldMapDataProvider:RefreshAllData()
     end)
+
+    UpdateElapsedTicker()
+end)
+
+WorldMapFrame:HookScript("OnHide", function()
+    UpdateElapsedTicker()
 end)
 
 print("|cff00ff00HerbTimer|r loaded!")

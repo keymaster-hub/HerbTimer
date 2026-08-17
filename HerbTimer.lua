@@ -2,6 +2,8 @@ local addonName = ...
 
 local WorldMapDataProvider
 local UpdateElapsedTicker
+local RebuildMinimapIcons
+local RefreshMinimapIconAppearance
 
 local DEFAULT_TRACKED_ITEMS = {
     [22792] = true, -- Nightmare Vine
@@ -40,6 +42,14 @@ local function MigrateDB()
     if HerbTimerDB.timeMode == nil then
         HerbTimerDB.timeMode = "clock"
     end
+
+    if HerbTimerDB.showMinimap == nil then
+        HerbTimerDB.showMinimap = true
+    end
+
+    if HerbTimerDB.showBorder == nil then
+        HerbTimerDB.showBorder = true
+    end
 end
 
 MigrateDB()
@@ -56,6 +66,14 @@ loader:SetScript("OnEvent", function(self, event, loadedAddonName)
     -- overwrites whatever MigrateDB() set up above. So migrate again
     -- here, once the real saved data is actually in place.
     MigrateDB()
+
+    if RebuildMinimapIcons then
+        RebuildMinimapIcons()
+    end
+
+    if UpdateElapsedTicker then
+        UpdateElapsedTicker()
+    end
 
     self:UnregisterEvent("ADDON_LOADED")
 end)
@@ -132,6 +150,10 @@ frame:SetScript("OnEvent", function(self, event, msg)
         }
 
         table.insert(HerbTimerDB.points, point)
+    end
+
+    if RebuildMinimapIcons then
+        RebuildMinimapIcons()
     end
 end)
 
@@ -214,6 +236,8 @@ local function PrintHelp()
     print("  |cffffcc00/ht items|r — show tracked item IDs")
     print("  |cffffcc00/ht icons|r — toggle item icons on the map (time-only when off)")
     print("  |cffffcc00/ht time|r — toggle time display: clock time vs. time elapsed")
+    print("  |cffffcc00/ht minimap|r — toggle all HerbTimer icons on the minimap")
+    print("  |cffffcc00/ht border|r — toggle showing off-range points on the minimap border")
     print("  |cffffcc00/ht clear|r — clear all saved points")
     print("  |cffffcc00/ht help|r — show this list")
 end
@@ -246,6 +270,15 @@ local function HandleSlashCommand(msg)
                 HerbTimerDB.points[i] = nil
             end
         end
+
+        if WorldMapFrame:IsShown() then
+            WorldMapDataProvider:RefreshAllData()
+        end
+
+        if RebuildMinimapIcons then
+            RebuildMinimapIcons()
+        end
+
         print("|cffffcc00HerbTimer:|r Database cleared.")
     elseif command == "add" then
         local itemID = tonumber(rest)
@@ -279,6 +312,10 @@ local function HandleSlashCommand(msg)
             WorldMapDataProvider:RefreshAllData()
         end
 
+        if RebuildMinimapIcons then
+            RebuildMinimapIcons()
+        end
+
         print(string.format(
             "|cff00ff00HerbTimer:|r Stopped tracking id %d and removed %d saved point(s).",
             itemID,
@@ -295,6 +332,10 @@ local function HandleSlashCommand(msg)
         if WorldMapFrame:IsShown() then
             WorldMapDataProvider:RefreshAllData()
         end
+
+        if RefreshMinimapIconAppearance then
+            RefreshMinimapIconAppearance()
+        end
     elseif command == "time" then
         HerbTimerDB.timeMode = (HerbTimerDB.timeMode == "elapsed") and "clock" or "elapsed"
 
@@ -307,7 +348,33 @@ local function HandleSlashCommand(msg)
             WorldMapDataProvider:RefreshAllData()
         end
 
+        if RefreshMinimapIconAppearance then
+            RefreshMinimapIconAppearance()
+        end
+
         UpdateElapsedTicker()
+    elseif command == "minimap" then
+        HerbTimerDB.showMinimap = not HerbTimerDB.showMinimap
+
+        print(string.format(
+            "|cff00ff00HerbTimer:|r Minimap icons %s.",
+            HerbTimerDB.showMinimap and "enabled" or "disabled"
+        ))
+
+        if RebuildMinimapIcons then
+            RebuildMinimapIcons()
+        end
+    elseif command == "border" then
+        HerbTimerDB.showBorder = not HerbTimerDB.showBorder
+
+        print(string.format(
+            "|cff00ff00HerbTimer:|r Off-range border markers %s.",
+            HerbTimerDB.showBorder and "enabled" or "disabled (out-of-range points are just hidden)"
+        ))
+
+        if RebuildMinimapIcons then
+            RebuildMinimapIcons()
+        end
     elseif command == "items" then
         PrintTrackedItems()
     else
@@ -454,12 +521,16 @@ end)
 local elapsedTicker
 
 function UpdateElapsedTicker()
-    local shouldRun = WorldMapFrame:IsShown() and HerbTimerDB.timeMode == "elapsed"
+    local shouldRun = HerbTimerDB.timeMode == "elapsed"
 
     if shouldRun and not elapsedTicker then
         elapsedTicker = C_Timer.NewTicker(30, function()
             if WorldMapFrame:IsShown() then
                 WorldMapDataProvider:RefreshAllData()
+            end
+
+            if RefreshMinimapIconAppearance then
+                RefreshMinimapIconAppearance()
             end
         end)
     elseif not shouldRun and elapsedTicker then
@@ -479,6 +550,175 @@ end)
 WorldMapFrame:HookScript("OnHide", function()
     UpdateElapsedTicker()
 end)
+
+--------------------------------------------------
+-- MINIMAP (via HereBeDragons)
+--------------------------------------------------
+
+local HBD = LibStub("HereBeDragons-2.0")
+local HBDPins = LibStub("HereBeDragons-Pins-2.0")
+local MINIMAP_REF = "HerbTimerMinimap"
+
+local minimapIconPool = {}
+local minimapIconsByPoint = {}
+
+-- Each entry has two parts:
+--   .anchor  - an invisible 1x1 frame that HereBeDragons owns entirely: it
+--              moves it and shows/hides it however it wants. We never touch
+--              its visibility ourselves.
+--   .visible - our actual icon+text frame, parented separately. WE are the
+--              only thing that ever shows or hides this one, based on the
+--              anchor's current (already-resolved) position. This avoids
+--              fighting HereBeDragons for Show()/Hide() every frame, which
+--              is what caused every border icon to flash visible while
+--              moving.
+local function CreateMinimapIconEntry()
+    local anchor = CreateFrame("Frame", nil, Minimap)
+    anchor:SetSize(1, 1)
+
+    local visible = CreateFrame("Frame", nil, Minimap)
+    visible:SetSize(14, 14)
+    visible:SetFrameStrata("TOOLTIP")
+    visible:Hide()
+
+    visible.texture = visible:CreateTexture(nil, "ARTWORK")
+    visible.texture:SetAllPoints()
+    visible.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    visible.timeText = visible:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    visible.timeText:SetPoint("TOP", visible, "BOTTOM", 0, -1)
+
+    return { anchor = anchor, visible = visible }
+end
+
+local function AcquireMinimapIcon()
+    local entry = table.remove(minimapIconPool)
+
+    if not entry then
+        entry = CreateMinimapIconEntry()
+    end
+
+    return entry
+end
+
+local function ReleaseMinimapIcon(entry)
+    entry.visible:Hide()
+    entry.anchor:ClearAllPoints()
+    entry.visible:ClearAllPoints()
+    entry.point = nil
+    table.insert(minimapIconPool, entry)
+end
+
+local function UpdateMinimapIconAppearance(entry, point)
+    if HerbTimerDB.showIcons then
+        local icon = GetIconForItemID(point.itemID)
+        entry.visible.texture:SetTexture(icon or DEFAULT_ICON)
+        entry.visible.texture:Show()
+    else
+        entry.visible.texture:Hide()
+    end
+
+    entry.visible.timeText:SetText(point.time and FormatPointTime(point.time) or "")
+end
+
+function RebuildMinimapIcons()
+    HBDPins:RemoveAllMinimapIcons(MINIMAP_REF)
+
+    for _, entry in pairs(minimapIconsByPoint) do
+        ReleaseMinimapIcon(entry)
+    end
+    wipe(minimapIconsByPoint)
+
+    if not HerbTimerDB or not HerbTimerDB.points or not HerbTimerDB.showMinimap then
+        return
+    end
+
+    for _, point in ipairs(HerbTimerDB.points) do
+        local entry = AcquireMinimapIcon()
+        entry.point = point
+        UpdateMinimapIconAppearance(entry, point)
+
+        -- floatOnEdge: nodes outside the minimap radius slide the anchor onto
+        -- its border instead of hiding it, like GatherMate2's minimap markers.
+        -- Controlled by /ht border.
+        local added = HBDPins:AddMinimapIconMap(MINIMAP_REF, entry.anchor, point.mapID, point.x, point.y, false, HerbTimerDB.showBorder)
+
+        if added then
+            minimapIconsByPoint[point] = entry
+        else
+            ReleaseMinimapIcon(entry)
+        end
+    end
+end
+
+function RefreshMinimapIconAppearance()
+    for point, entry in pairs(minimapIconsByPoint) do
+        UpdateMinimapIconAppearance(entry, point)
+    end
+end
+
+-- Mirrors each anchor's HereBeDragons-computed position onto our own visible
+-- icon, and limits border ("floating") icons to at most one per screen-relative
+-- side (top/bottom/left/right), keeping only the nearest node in each
+-- direction. Icons that are genuinely within minimap range are shown as-is.
+local function UpdateMinimapEdgeGrouping()
+    local px, py, pInstance = HBD:GetPlayerWorldPosition()
+    if not px then
+        for _, entry in pairs(minimapIconsByPoint) do
+            entry.visible:Hide()
+        end
+        return
+    end
+
+    local bucket = {}
+
+    for point, entry in pairs(minimapIconsByPoint) do
+        if not entry.anchor:IsShown() then
+            entry.visible:Hide()
+        else
+            entry.visible:ClearAllPoints()
+            entry.visible:SetPoint("CENTER", entry.anchor, "CENTER", 0, 0)
+
+            local onEdge = HBDPins:IsMinimapIconOnEdge(entry.anchor)
+
+            if onEdge then
+                entry.visible:Hide() -- tentative; re-shown below if it wins its direction bucket
+
+                local wx, wy, winstance = HBD:GetWorldCoordinatesFromZone(point.x, point.y, point.mapID)
+                local distance
+
+                if wx and winstance == pInstance then
+                    distance = (HBD:GetWorldDistance(pInstance, px, py, wx, wy))
+                end
+
+                if distance then
+                    local _, _, _, offsetX, offsetY = entry.anchor:GetPoint(1)
+                    offsetX, offsetY = offsetX or 0, offsetY or 0
+
+                    local direction
+                    if math.abs(offsetY) >= math.abs(offsetX) then
+                        direction = offsetY > 0 and "top" or "bottom"
+                    else
+                        direction = offsetX > 0 and "right" or "left"
+                    end
+
+                    local current = bucket[direction]
+                    if not current or distance < current.distance then
+                        bucket[direction] = { entry = entry, distance = distance }
+                    end
+                end
+            else
+                entry.visible:Show()
+            end
+        end
+    end
+
+    for _, winner in pairs(bucket) do
+        winner.entry.visible:Show()
+    end
+end
+
+C_Timer.NewTicker(0.2, UpdateMinimapEdgeGrouping)
 
 print("|cff00ff00HerbTimer|r loaded!")
 print("|cffaaaaaaType /ht for the command list.|r")

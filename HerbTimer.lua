@@ -4,6 +4,7 @@ local WorldMapDataProvider
 local UpdateElapsedTicker
 local RebuildMinimapIcons
 local RefreshMinimapIconAppearance
+local RefreshOptionsPanel
 
 local DEFAULT_TRACKED_ITEMS = {
     [22792] = true, -- Nightmare Vine
@@ -238,6 +239,7 @@ local function PrintHelp()
     print("  |cffffcc00/ht time|r — toggle time display: clock time vs. time elapsed")
     print("  |cffffcc00/ht minimap|r — toggle all HerbTimer icons on the minimap")
     print("  |cffffcc00/ht border|r — toggle showing off-range points on the minimap border")
+    print("  |cffffcc00/ht options|r — open/close the settings window")
     print("  |cffffcc00/ht clear|r — clear all saved points")
     print("  |cffffcc00/ht help|r — show this list")
 end
@@ -260,6 +262,10 @@ local function HandleSlashCommand(msg)
 
     if command == "" or command == "help" then
         PrintHelp()
+
+        if HerbTimerOptionsPanel then
+            HerbTimerOptionsPanel:Show()
+        end
     elseif command == "list" then
         PrintPoints()
     elseif command == "clear" then
@@ -279,6 +285,10 @@ local function HandleSlashCommand(msg)
             RebuildMinimapIcons()
         end
 
+        if RefreshOptionsPanel then
+            RefreshOptionsPanel()
+        end
+
         print("|cffffcc00HerbTimer:|r Database cleared.")
     elseif command == "add" then
         local itemID = tonumber(rest)
@@ -290,6 +300,10 @@ local function HandleSlashCommand(msg)
 
         HerbTimerDB.trackedItems[itemID] = true
         print(string.format("|cff00ff00HerbTimer:|r Now tracking %s (id: %d).", GetItemDisplayName(itemID), itemID))
+
+        if RefreshOptionsPanel then
+            RefreshOptionsPanel()
+        end
     elseif command == "remove" then
         local itemID = tonumber(rest)
 
@@ -316,6 +330,10 @@ local function HandleSlashCommand(msg)
             RebuildMinimapIcons()
         end
 
+        if RefreshOptionsPanel then
+            RefreshOptionsPanel()
+        end
+
         print(string.format(
             "|cff00ff00HerbTimer:|r Stopped tracking id %d and removed %d saved point(s).",
             itemID,
@@ -336,6 +354,10 @@ local function HandleSlashCommand(msg)
         if RefreshMinimapIconAppearance then
             RefreshMinimapIconAppearance()
         end
+
+        if RefreshOptionsPanel then
+            RefreshOptionsPanel()
+        end
     elseif command == "time" then
         HerbTimerDB.timeMode = (HerbTimerDB.timeMode == "elapsed") and "clock" or "elapsed"
 
@@ -352,6 +374,10 @@ local function HandleSlashCommand(msg)
             RefreshMinimapIconAppearance()
         end
 
+        if RefreshOptionsPanel then
+            RefreshOptionsPanel()
+        end
+
         UpdateElapsedTicker()
     elseif command == "minimap" then
         HerbTimerDB.showMinimap = not HerbTimerDB.showMinimap
@@ -364,6 +390,10 @@ local function HandleSlashCommand(msg)
         if RebuildMinimapIcons then
             RebuildMinimapIcons()
         end
+
+        if RefreshOptionsPanel then
+            RefreshOptionsPanel()
+        end
     elseif command == "border" then
         HerbTimerDB.showBorder = not HerbTimerDB.showBorder
 
@@ -375,8 +405,22 @@ local function HandleSlashCommand(msg)
         if RebuildMinimapIcons then
             RebuildMinimapIcons()
         end
+
+        if RefreshOptionsPanel then
+            RefreshOptionsPanel()
+        end
     elseif command == "items" then
         PrintTrackedItems()
+    elseif command == "options" or command == "config" then
+        if HerbTimerOptionsPanel then
+            if HerbTimerOptionsPanel:IsShown() then
+                HerbTimerOptionsPanel:Hide()
+            else
+                HerbTimerOptionsPanel:Show()
+            end
+        else
+            print("|cffff0000HerbTimer:|r Could not open the options panel.")
+        end
     else
         print(string.format("|cffff0000HerbTimer:|r Unknown command '%s'.", command))
         PrintHelp()
@@ -719,6 +763,292 @@ local function UpdateMinimapEdgeGrouping()
 end
 
 C_Timer.NewTicker(0.2, UpdateMinimapEdgeGrouping)
+
+--------------------------------------------------
+-- OPTIONS PANEL
+--------------------------------------------------
+
+local optionsPanel = CreateFrame("Frame", "HerbTimerOptionsPanel", UIParent, "BackdropTemplate")
+optionsPanel:SetSize(400, 380)
+optionsPanel:SetPoint("CENTER")
+optionsPanel:SetFrameStrata("DIALOG")
+optionsPanel:SetMovable(true)
+optionsPanel:EnableMouse(true)
+optionsPanel:RegisterForDrag("LeftButton")
+optionsPanel:SetScript("OnDragStart", optionsPanel.StartMoving)
+optionsPanel:SetScript("OnDragStop", optionsPanel.StopMovingOrSizing)
+optionsPanel:SetBackdrop({
+    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile = true, tileSize = 32, edgeSize = 32,
+    insets = { left = 11, right = 12, top = 12, bottom = 11 },
+})
+optionsPanel:Hide()
+
+local closeButton = CreateFrame("Button", nil, optionsPanel, "UIPanelCloseButton")
+closeButton:SetPoint("TOPRIGHT", -4, -4)
+
+local panelTitle = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+panelTitle:SetPoint("TOPLEFT", 16, -16)
+panelTitle:SetText("HerbTimer")
+
+local function CreatePanelCheckbox(label, anchorTo, yOffset)
+    local cb = CreateFrame("CheckButton", nil, optionsPanel, "InterfaceOptionsCheckButtonTemplate")
+    cb:SetPoint("TOPLEFT", anchorTo, "BOTTOMLEFT", 0, yOffset)
+
+    local text = cb.Text or cb.text
+    if text then
+        text:SetText(label)
+    end
+
+    return cb
+end
+
+local showIconsCheckbox = CreatePanelCheckbox("Show item icons on the map", panelTitle, -16)
+local showMinimapCheckbox = CreatePanelCheckbox("Show icons on the minimap", showIconsCheckbox, -4)
+local showBorderCheckbox = CreatePanelCheckbox("Show off-range points on the minimap border", showMinimapCheckbox, -4)
+
+local timeLabel = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+timeLabel:SetPoint("TOPLEFT", showBorderCheckbox, "BOTTOMLEFT", 0, -20)
+timeLabel:SetText("Time display")
+
+local clockCheckbox = CreatePanelCheckbox("Clock time (14:32)", timeLabel, -8)
+local elapsedCheckbox = CreatePanelCheckbox("Time elapsed (5m ago)", clockCheckbox, -4)
+
+local itemsLabel = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+itemsLabel:SetPoint("TOPLEFT", elapsedCheckbox, "BOTTOMLEFT", 0, -20)
+itemsLabel:SetText("Tracked items")
+
+local ITEM_ROW_COUNT = 8
+local itemRows = {}
+
+for i = 1, ITEM_ROW_COUNT do
+    local row = CreateFrame("Frame", nil, optionsPanel)
+    row:SetSize(360, 20)
+
+    if i == 1 then
+        row:SetPoint("TOPLEFT", itemsLabel, "BOTTOMLEFT", 4, -8)
+    else
+        row:SetPoint("TOPLEFT", itemRows[i - 1], "BOTTOMLEFT", 0, -4)
+    end
+
+    row.text = row:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    row.text:SetPoint("LEFT", 0, 0)
+
+    row.removeButton = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    row.removeButton:SetSize(20, 20)
+    row.removeButton:SetPoint("LEFT", row.text, "RIGHT", 8, 0)
+    row.removeButton:SetText("X")
+    row.removeButton:SetScript("OnClick", function()
+        local itemID = row.itemID
+        if not itemID then
+            return
+        end
+
+        HerbTimerDB.trackedItems[itemID] = nil
+
+        for j = #HerbTimerDB.points, 1, -1 do
+            if HerbTimerDB.points[j].itemID == itemID then
+                table.remove(HerbTimerDB.points, j)
+            end
+        end
+
+        if WorldMapFrame:IsShown() then
+            WorldMapDataProvider:RefreshAllData()
+        end
+
+        if RebuildMinimapIcons then
+            RebuildMinimapIcons()
+        end
+
+        RefreshOptionsPanel()
+    end)
+
+    row:Hide()
+    itemRows[i] = row
+end
+
+local addItemBox = CreateFrame("EditBox", nil, optionsPanel, "InputBoxTemplate")
+addItemBox:SetSize(90, 20)
+addItemBox:SetAutoFocus(false)
+addItemBox:SetNumeric(true)
+addItemBox:SetPoint("TOPLEFT", itemsLabel, "BOTTOMLEFT", 6, -12)
+
+local addItemButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+addItemButton:SetSize(90, 22)
+addItemButton:SetPoint("LEFT", addItemBox, "RIGHT", 8, 0)
+addItemButton:SetText("Add item")
+addItemButton:SetScript("OnClick", function()
+    local itemID = tonumber(addItemBox:GetText())
+
+    if not itemID then
+        return
+    end
+
+    HerbTimerDB.trackedItems[itemID] = true
+    addItemBox:SetText("")
+    addItemBox:ClearFocus()
+
+    RefreshOptionsPanel()
+end)
+
+addItemBox:SetScript("OnEnterPressed", function()
+    addItemButton:Click()
+end)
+
+local clearButton = CreateFrame("Button", nil, optionsPanel, "UIPanelButtonTemplate")
+clearButton:SetSize(140, 22)
+clearButton:SetPoint("TOPLEFT", addItemBox, "BOTTOMLEFT", -6, -20)
+clearButton:SetText("Clear all points")
+clearButton:SetScript("OnClick", function()
+    if wipe then
+        wipe(HerbTimerDB.points)
+    else
+        for i = #HerbTimerDB.points, 1, -1 do
+            HerbTimerDB.points[i] = nil
+        end
+    end
+
+    if WorldMapFrame:IsShown() then
+        WorldMapDataProvider:RefreshAllData()
+    end
+
+    if RebuildMinimapIcons then
+        RebuildMinimapIcons()
+    end
+end)
+
+function RefreshOptionsPanel()
+    showIconsCheckbox:SetChecked(HerbTimerDB.showIcons)
+    showMinimapCheckbox:SetChecked(HerbTimerDB.showMinimap)
+    showBorderCheckbox:SetChecked(HerbTimerDB.showBorder)
+    clockCheckbox:SetChecked(HerbTimerDB.timeMode ~= "elapsed")
+    elapsedCheckbox:SetChecked(HerbTimerDB.timeMode == "elapsed")
+
+    local ids = {}
+    for itemID in pairs(HerbTimerDB.trackedItems) do
+        table.insert(ids, itemID)
+    end
+    table.sort(ids)
+
+    local visibleCount = 0
+
+    for i, row in ipairs(itemRows) do
+        local itemID = ids[i]
+
+        if itemID then
+            visibleCount = visibleCount + 1
+            row.itemID = itemID
+            row.text:SetText(string.format("%s (%d)", GetItemDisplayName(itemID), itemID))
+            row:Show()
+        else
+            row.itemID = nil
+            row:Hide()
+        end
+    end
+
+    -- Reposition the "Add item" row right under the last visible tracked-item
+    -- row (or the label itself if none), instead of always reserving space
+    -- for all 8 possible slots, and resize the window to fit.
+    addItemBox:ClearAllPoints()
+    if visibleCount > 0 then
+        addItemBox:SetPoint("TOPLEFT", itemRows[visibleCount], "BOTTOMLEFT", 6, -12)
+    else
+        addItemBox:SetPoint("TOPLEFT", itemsLabel, "BOTTOMLEFT", 6, -12)
+    end
+
+    local baseHeight = 350 -- everything above the tracked-items rows, plus the add/clear controls and padding
+    local rowHeight = 26
+    optionsPanel:SetHeight(math.max(baseHeight + visibleCount * rowHeight, 380))
+end
+
+showIconsCheckbox:SetScript("OnClick", function(self)
+    HerbTimerDB.showIcons = self:GetChecked() and true or false
+
+    if WorldMapFrame:IsShown() then
+        WorldMapDataProvider:RefreshAllData()
+    end
+
+    if RefreshMinimapIconAppearance then
+        RefreshMinimapIconAppearance()
+    end
+end)
+
+showMinimapCheckbox:SetScript("OnClick", function(self)
+    HerbTimerDB.showMinimap = self:GetChecked() and true or false
+
+    if RebuildMinimapIcons then
+        RebuildMinimapIcons()
+    end
+end)
+
+showBorderCheckbox:SetScript("OnClick", function(self)
+    HerbTimerDB.showBorder = self:GetChecked() and true or false
+
+    if RebuildMinimapIcons then
+        RebuildMinimapIcons()
+    end
+end)
+
+local function SetTimeMode(mode)
+    HerbTimerDB.timeMode = mode
+    RefreshOptionsPanel()
+
+    if WorldMapFrame:IsShown() then
+        WorldMapDataProvider:RefreshAllData()
+    end
+
+    if RefreshMinimapIconAppearance then
+        RefreshMinimapIconAppearance()
+    end
+
+    UpdateElapsedTicker()
+end
+
+clockCheckbox:SetScript("OnClick", function() SetTimeMode("clock") end)
+elapsedCheckbox:SetScript("OnClick", function() SetTimeMode("elapsed") end)
+
+optionsPanel:SetScript("OnShow", RefreshOptionsPanel)
+
+tinsert(UISpecialFrames, "HerbTimerOptionsPanel") -- lets Escape close the window too
+
+--------------------------------------------------
+-- BLIZZARD ADDONS LIST STUB PANEL
+--------------------------------------------------
+
+-- A minimal panel registered with Blizzard's Options > AddOns list, purely so
+-- HerbTimer shows up there for people who go looking for settings in the
+-- game's menu instead of reading the chat help. It doesn't hold any actual
+-- settings itself (those live in our own /ht options window) -- it just
+-- points people to that window, Leatrix Plus-style.
+local stubPanel = CreateFrame("Frame", "HerbTimerStubPanel", UIParent)
+stubPanel.name = "HerbTimer"
+
+local stubTitle = stubPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+stubTitle:SetPoint("TOP", 0, -80)
+stubTitle:SetText("HerbTimer")
+
+local stubSubtitle = stubPanel:CreateFontString(nil, "ARTWORK", "GameFontHighlightLarge")
+stubSubtitle:SetPoint("TOP", stubTitle, "BOTTOM", 0, -10)
+stubSubtitle:SetText("Herb Respawn Tracker")
+
+local stubCommand = stubPanel:CreateFontString(nil, "ARTWORK", "GameFontNormalHuge")
+stubCommand:SetPoint("TOP", stubSubtitle, "BOTTOM", 0, -60)
+stubCommand:SetText("/ht")
+
+local stubOpenButton = CreateFrame("Button", nil, stubPanel, "UIPanelButtonTemplate")
+stubOpenButton:SetSize(160, 30)
+stubOpenButton:SetPoint("TOP", stubCommand, "BOTTOM", 0, -20)
+stubOpenButton:SetText("Open Settings")
+stubOpenButton:SetScript("OnClick", function()
+    if HerbTimerOptionsPanel then
+        HerbTimerOptionsPanel:Show()
+    end
+end)
+
+if InterfaceOptions_AddCategory then
+    InterfaceOptions_AddCategory(stubPanel)
+end
 
 print("|cff00ff00HerbTimer|r loaded!")
 print("|cffaaaaaaType /ht for the command list.|r")

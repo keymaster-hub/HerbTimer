@@ -37,7 +37,7 @@ The window features:
 Open the settings window with:
 
 ```text
-/ht options
+/ht
 ```
 
 or:

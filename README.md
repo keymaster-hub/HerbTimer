@@ -1,45 +1,98 @@
 # HerbTimer
 
-**HerbTimer** is a lightweight World of Warcraft TBC Classic addon for tracking gathering locations and the last time an item was looted.
+**HerbTimer** is a lightweight World of Warcraft: The Burning Crusade Classic addon for tracking gathering locations and the last time a tracked resource was looted.
 
-The addon saves gathering locations and displays the last loot time on both the **World Map** and **Minimap**.
+Although it was originally created for herbs, HerbTimer can track **any lootable resource or item** by its Item ID.
 
 ## Features
 
-- Track gathering locations automatically from your own loot messages.
-- Save the **last loot time** for each location.
-- Display gathering locations on the **World Map and Minimap**.
-- Choose how loot times are displayed:
+- Automatically records the location and last loot time of tracked items.
+- Displays saved points on both the **World Map** and **Minimap**.
+- Shows the last loot time on map pins.
+- Two time display modes:
   - **Clock** — `14:32` (default)
   - **Elapsed** — `5m ago` / `1h 12m ago`
-- Live elapsed-time updates while the World Map is open.
-- Optional gathering icons on both the World Map and Minimap.
-- Minimap points outside the visible area can optionally **float to the edge of the Minimap**.
-- Smart Minimap edge handling — no more than one edge icon is shown on each visible side of the Minimap.
+- Automatically updates elapsed time while the World Map is open.
+- Optional item icons on the World Map and Minimap.
+- Optional display of out-of-range points on the Minimap border.
+- Smart Minimap edge handling: at most one out-of-range point is shown on each visible side.
 - Works correctly with **Rotate Minimap** enabled.
-- Automatically synchronizes World Map and Minimap when changing zones, looting, removing items, or clearing saved locations.
-- Lightweight and designed for a small personal database of gathering spots.
+- Automatically refreshes map and Minimap points when the zone changes or saved data changes.
+- Uses **HereBeDragons** and **HereBeDragons-Pins** for map and Minimap positioning.
+- No external libraries need to be installed separately.
 
-## Libraries
+## Settings Window
 
-HerbTimer uses:
+HerbTimer has its own dedicated settings window instead of relying on the game's native interface options.
 
-- **HereBeDragons**
-- **HereBeDragons-Pins**
+The window features:
 
-These are the same libraries used by GatherMate2 for map and Minimap positioning.
+- A Blizzard-style `UI-DialogBox` frame.
+- A movable window that can be dragged by the frame.
+- A close button (`×`).
+- Closing with the **Esc** key.
+- The same checkboxes, tracked-item list and controls available in the previous settings interface.
+- No dependency on unavailable or broken native options APIs on the TBC Classic client.
 
-The libraries are included in the `Libs/` folder and loaded before the main addon file.
+Open the settings window with:
 
-## Default tracked item
+```text
+/ht options
+```
 
-The addon is currently configured to track:
+or:
 
-- **Nightmare Vine** — `22792`
+```text
+/ht config
+```
 
-Additional items can be added manually using their item ID.
+Both commands simply open or close the HerbTimer settings window.
+
+## Tracked Resources
+
+HerbTimer was originally designed for herbs, but it can track any lootable resource or item.
+
+The default tracked resource is:
+
+- **Nightmare Vine** — Item ID `22792`
+
+**Mana Thistle** — Item ID `22793` can also be added to the tracked list.
+
+Additional resources can be added by entering their Item ID in the settings window or using:
+
+```text
+/ht add <itemID>
+```
+
+Example:
+
+```text
+/ht add 22793
+```
 
 ## Commands
+
+### Open settings
+
+```text
+/ht options
+```
+
+or:
+
+```text
+/ht config
+```
+
+Opens or closes the custom HerbTimer settings window.
+
+### Show commands
+
+```text
+/ht
+```
+
+Displays the available HerbTimer commands.
 
 ### Show saved locations
 
@@ -47,11 +100,15 @@ Additional items can be added manually using their item ID.
 /ht list
 ```
 
+Displays saved points including map, coordinates, item and last loot time.
+
 ### Add an item
 
 ```text
 /ht add <itemID>
 ```
+
+Adds an Item ID to the tracked-item list.
 
 ### Remove an item
 
@@ -59,21 +116,25 @@ Additional items can be added manually using their item ID.
 /ht remove <itemID>
 ```
 
+Stops tracking the item and removes its saved points.
+
 ### Show tracked items
 
 ```text
 /ht items
 ```
 
-### Toggle map icons
+Displays the currently tracked items.
+
+### Toggle item icons
 
 ```text
 /ht icons
 ```
 
-Toggles HerbTimer gathering icons on both the World Map and Minimap.
+Toggles HerbTimer item icons on the World Map and Minimap.
 
-### Change time display mode
+### Change time display
 
 ```text
 /ht time
@@ -81,14 +142,10 @@ Toggles HerbTimer gathering icons on both the World Map and Minimap.
 
 Switches between:
 
-- **Clock** — `14:32` (default)
+- **Clock** — `14:32`
 - **Elapsed** — `5m ago` / `1h 12m ago`
 
-The selected mode is saved and persists through `/reload` and relogging.
-
-The same time formatting is used on the World Map, Minimap, and `/ht list`.
-
-When **Elapsed** mode is active, the displayed times are updated every 30 seconds while the World Map is open.
+The selected mode is saved and persists through reloads and relogging.
 
 ### Toggle Minimap icons
 
@@ -96,21 +153,21 @@ When **Elapsed** mode is active, the displayed times are updated every 30 second
 /ht minimap
 ```
 
-Completely enables or disables HerbTimer icons on the Minimap.
+Completely enables or disables all HerbTimer icons on the Minimap.
 
-### Toggle Minimap edge display
+When Minimap icons are disabled, HerbTimer does not register the icons at all.
+
+### Toggle Minimap border markers
 
 ```text
 /ht border
 ```
 
-Controls whether gathering points outside the visible Minimap area are displayed on its edge.
+Controls whether points outside the visible Minimap radius are moved to the Minimap border.
 
-When enabled, out-of-range points float to the Minimap edge. Only the nearest point on each visible side is displayed. Points physically inside the Minimap radius are displayed normally.
+When enabled, out-of-range points can be displayed along the Minimap edge.
 
-When disabled, points outside the Minimap radius are hidden.
-
-The edge calculation works correctly with **Rotate Minimap** enabled.
+When disabled, points outside the Minimap radius are simply hidden and are not moved to the edge.
 
 ### Clear saved locations
 
@@ -118,17 +175,25 @@ The edge calculation works correctly with **Rotate Minimap** enabled.
 /ht clear
 ```
 
-Removes all saved gathering locations from the database.
+Removes all saved gathering points.
 
-## Minimap behavior
+### Show help
 
-HerbTimer uses HereBeDragons-Pins to position gathering points on the Minimap.
+```text
+/ht help
+```
 
-Points within the visible Minimap radius are displayed at their actual positions.
+Displays the command list.
 
-When edge display is enabled, points outside the visible radius are moved to the Minimap edge instead of disappearing.
+## Minimap
 
-To prevent clutter, edge points are grouped by their visible screen side:
+HerbTimer uses **HereBeDragons** and **HereBeDragons-Pins** to position Minimap points.
+
+Points within the visible Minimap range are displayed at their actual positions.
+
+When `/ht border` is enabled, points outside the visible range can be moved to the edge of the Minimap.
+
+To reduce clutter, out-of-range points are grouped by their visible screen side:
 
 - Top
 - Bottom
@@ -137,11 +202,32 @@ To prevent clutter, edge points are grouped by their visible screen side:
 
 Only the nearest point on each side is displayed.
 
-Points inside the Minimap radius are not affected by this limitation.
+Points that are physically inside the Minimap range are displayed normally and are not affected by this limitation.
 
-## How it works
+The edge calculation works correctly with **Rotate Minimap** enabled.
 
-When you loot a tracked item, HerbTimer reads the loot message and records:
+## Time Display
+
+The same time formatting is used on the World Map, Minimap and `/ht list`.
+
+In **Clock** mode:
+
+```text
+14:32
+```
+
+In **Elapsed** mode:
+
+```text
+5m ago
+1h 12m ago
+```
+
+Elapsed-time displays are refreshed automatically while the World Map is open.
+
+## How It Works
+
+When you loot a tracked item, HerbTimer reads the item ID from the loot message and records:
 
 - Map ID
 - X/Y coordinates
@@ -149,12 +235,14 @@ When you loot a tracked item, HerbTimer reads the loot message and records:
 - Item name
 - Last loot time
 
-The saved information is used to display the gathering location and its last known loot time on the World Map and Minimap.
+If the same tracked item is collected again at approximately the same location, HerbTimer updates the existing point instead of creating an unnecessary duplicate.
+
+The saved information is then displayed on the World Map and Minimap.
 
 ## Requirements
 
 - World of Warcraft **The Burning Crusade Classic**
-- No external libraries need to be installed separately.
+- No additional libraries are required.
 
 ## Installation
 
@@ -166,7 +254,7 @@ The saved information is used to display the gathering location and its last kno
 World of Warcraft\_classic_\Interface\AddOns\
 ```
 
-The final folder structure should look like:
+The final structure should look like:
 
 ```text
 Interface
@@ -176,21 +264,24 @@ Interface
         ├── HerbTimer.lua
         ├── HerbTimer.xml
         └── Libs
-            ├── HereBeDragons
-            └── HereBeDragons-Pins
+            ├── LibStub
+            ├── CallbackHandler-1.0
+            └── HereBeDragons
 ```
 
 4. Start the game and make sure **HerbTimer** is enabled in the AddOns menu.
 
-> **Note:** GitHub's **Code → Download ZIP** downloads the source repository, not a ready-to-install addon package. For installation, use a release ZIP when one is available.
+> **Note:** GitHub's **Code → Download ZIP** downloads the source repository. For installation, use the ZIP attached to a GitHub Release when available.
 
 ## Status
 
 **Beta**
 
-HerbTimer is currently focused on tracking gathering locations and displaying the last loot time on the World Map and Minimap.
+HerbTimer is intentionally lightweight and focused on tracking gathering locations and loot times.
 
-More functionality may be added in the future.
+It was originally designed for rare herbs such as Nightmare Vine and Mana Thistle, but any lootable resource can be tracked by adding its Item ID.
+
+More functionality may be added in future releases.
 
 ## Author
 

@@ -260,12 +260,12 @@ local function HandleSlashCommand(msg)
 
     command = command:lower()
 
-    if command == "" or command == "help" then
-        PrintHelp()
-
+    if command == "" then
         if HerbTimerOptionsPanel then
             HerbTimerOptionsPanel:Show()
         end
+    elseif command == "help" then
+        PrintHelp()
     elseif command == "list" then
         PrintPoints()
     elseif command == "clear" then

@@ -75,7 +75,7 @@ Example:
 ### Open settings
 
 ```text
-/ht options
+/ht
 ```
 
 or:
@@ -89,7 +89,7 @@ Opens or closes the custom HerbTimer settings window.
 ### Show commands
 
 ```text
-/ht
+/ht help
 ```
 
 Displays the available HerbTimer commands.

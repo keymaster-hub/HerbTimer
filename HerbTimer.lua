@@ -621,7 +621,7 @@ local function CreateMinimapIconEntry()
     anchor:SetSize(1, 1)
 
     local visible = CreateFrame("Frame", nil, Minimap)
-    visible:SetSize(14, 14)
+    visible:SetSize(7, 7)
     visible:SetFrameStrata("TOOLTIP")
     visible:Hide()
 
@@ -804,8 +804,8 @@ local function CreatePanelCheckbox(label, anchorTo, yOffset)
     return cb
 end
 
-local showIconsCheckbox = CreatePanelCheckbox("Show item icons on the map", panelTitle, -16)
-local showMinimapCheckbox = CreatePanelCheckbox("Show icons on the minimap", showIconsCheckbox, -4)
+local showIconsCheckbox = CreatePanelCheckbox("Show item icons on map & minimap", panelTitle, -16)
+local showMinimapCheckbox = CreatePanelCheckbox("Show on the minimap", showIconsCheckbox, -4)
 local showBorderCheckbox = CreatePanelCheckbox("Show off-range points on the minimap border", showMinimapCheckbox, -4)
 
 local timeLabel = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -1046,7 +1046,10 @@ stubOpenButton:SetScript("OnClick", function()
     end
 end)
 
-if InterfaceOptions_AddCategory then
+if Settings and Settings.RegisterCanvasLayoutCategory then
+    local category = Settings.RegisterCanvasLayoutCategory(stubPanel, "HerbTimer")
+    Settings.RegisterAddOnCategory(category)
+elseif InterfaceOptions_AddCategory then
     InterfaceOptions_AddCategory(stubPanel)
 end
 

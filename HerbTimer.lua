@@ -51,6 +51,10 @@ local function MigrateDB()
     if HerbTimerDB.showBorder == nil then
         HerbTimerDB.showBorder = true
     end
+
+    if HerbTimerDB.maxPointsPerItem == nil then
+        HerbTimerDB.maxPointsPerItem = 2
+    end
 end
 
 MigrateDB()
@@ -173,13 +177,40 @@ local function FormatPointTime(pointTime)
         local minutes = math.floor((elapsed % 3600) / 60)
 
         if hours > 0 then
-            return string.format("%dh %dm ago", hours, minutes)
+            return string.format("%dh %dm", hours, minutes)
         else
-            return string.format("%dm ago", minutes)
+            return string.format("%dm", minutes)
         end
     end
 
     return date("%H:%M", pointTime)
+end
+
+-- Returns only the N most recent points per tracked item (HerbTimerDB.maxPointsPerItem),
+-- used for what's actually drawn on the world map and minimap. /ht list still shows
+-- everything -- this limit only affects the map display.
+local function GetVisiblePoints()
+    local byItem = {}
+
+    for _, point in ipairs(HerbTimerDB.points) do
+        byItem[point.itemID] = byItem[point.itemID] or {}
+        table.insert(byItem[point.itemID], point)
+    end
+
+    local limit = HerbTimerDB.maxPointsPerItem or 2
+    local visible = {}
+
+    for _, points in pairs(byItem) do
+        table.sort(points, function(a, b)
+            return (a.time or 0) > (b.time or 0)
+        end)
+
+        for i = 1, math.min(limit, #points) do
+            table.insert(visible, points[i])
+        end
+    end
+
+    return visible
 end
 
 local function GetItemDisplayName(itemID)
@@ -466,7 +497,7 @@ function WorldMapDataProvider:RefreshAllData()
         return
     end
 
-    for _, point in ipairs(HerbTimerDB.points) do
+    for _, point in ipairs(GetVisiblePoints()) do
         if point.mapID == mapID then
             local pin = map:AcquirePin(
                 "HerbTimerWorldMapPinTemplate",
@@ -677,7 +708,7 @@ function RebuildMinimapIcons()
         return
     end
 
-    for _, point in ipairs(HerbTimerDB.points) do
+    for _, point in ipairs(GetVisiblePoints()) do
         local entry = AcquireMinimapIcon()
         entry.point = point
         UpdateMinimapIconAppearance(entry, point)
@@ -769,7 +800,7 @@ C_Timer.NewTicker(0.2, UpdateMinimapEdgeGrouping)
 --------------------------------------------------
 
 local optionsPanel = CreateFrame("Frame", "HerbTimerOptionsPanel", UIParent, "BackdropTemplate")
-optionsPanel:SetSize(400, 380)
+optionsPanel:SetSize(400, 410)
 optionsPanel:SetPoint("CENTER")
 optionsPanel:SetFrameStrata("DIALOG")
 optionsPanel:SetMovable(true)
@@ -808,8 +839,42 @@ local showIconsCheckbox = CreatePanelCheckbox("Show item icons on map & minimap"
 local showMinimapCheckbox = CreatePanelCheckbox("Show on the minimap", showIconsCheckbox, -4)
 local showBorderCheckbox = CreatePanelCheckbox("Show off-range points on the minimap border", showMinimapCheckbox, -4)
 
+local maxPointsLabel = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+maxPointsLabel:SetPoint("TOPLEFT", showBorderCheckbox, "BOTTOMLEFT", 2, -20)
+maxPointsLabel:SetText("Max points shown per item")
+
+local maxPointsBox = CreateFrame("EditBox", nil, optionsPanel, "InputBoxTemplate")
+maxPointsBox:SetSize(30, 20)
+maxPointsBox:SetAutoFocus(false)
+maxPointsBox:SetNumeric(true)
+maxPointsBox:SetMaxLetters(2)
+maxPointsBox:SetPoint("LEFT", maxPointsLabel, "RIGHT", 14, 0)
+maxPointsBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+end)
+maxPointsBox:SetScript("OnEnterPressed", function(self)
+    self:ClearFocus()
+end)
+maxPointsBox:SetScript("OnEditFocusLost", function(self)
+    local value = tonumber(self:GetText())
+
+    if value and value >= 1 then
+        HerbTimerDB.maxPointsPerItem = math.floor(value)
+    end
+
+    self:SetText(tostring(HerbTimerDB.maxPointsPerItem))
+
+    if WorldMapFrame:IsShown() then
+        WorldMapDataProvider:RefreshAllData()
+    end
+
+    if RebuildMinimapIcons then
+        RebuildMinimapIcons()
+    end
+end)
+
 local timeLabel = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-timeLabel:SetPoint("TOPLEFT", showBorderCheckbox, "BOTTOMLEFT", 0, -20)
+timeLabel:SetPoint("TOPLEFT", maxPointsLabel, "BOTTOMLEFT", -2, -20)
 timeLabel:SetText("Time display")
 
 local clockCheckbox = CreatePanelCheckbox("Clock time (14:32)", timeLabel, -8)
@@ -925,6 +990,10 @@ function RefreshOptionsPanel()
     clockCheckbox:SetChecked(HerbTimerDB.timeMode ~= "elapsed")
     elapsedCheckbox:SetChecked(HerbTimerDB.timeMode == "elapsed")
 
+    if not maxPointsBox:HasFocus() then
+        maxPointsBox:SetText(tostring(HerbTimerDB.maxPointsPerItem or 2))
+    end
+
     local ids = {}
     for itemID in pairs(HerbTimerDB.trackedItems) do
         table.insert(ids, itemID)
@@ -957,7 +1026,7 @@ function RefreshOptionsPanel()
         addItemBox:SetPoint("TOPLEFT", itemsLabel, "BOTTOMLEFT", 6, -12)
     end
 
-    local baseHeight = 350 -- everything above the tracked-items rows, plus the add/clear controls and padding
+    local baseHeight = 384 -- everything above the tracked-items rows, plus the add/clear controls and padding
     local rowHeight = 26
     optionsPanel:SetHeight(math.max(baseHeight + visibleCount * rowHeight, 380))
 end

@@ -599,7 +599,7 @@ function UpdateElapsedTicker()
     local shouldRun = HerbTimerDB.timeMode == "elapsed"
 
     if shouldRun and not elapsedTicker then
-        elapsedTicker = C_Timer.NewTicker(30, function()
+        elapsedTicker = C_Timer.NewTicker(5, function()
             if WorldMapFrame:IsShown() then
                 WorldMapDataProvider:RefreshAllData()
             end

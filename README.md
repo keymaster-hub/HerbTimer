@@ -17,17 +17,7 @@ A lightweight World of Warcraft (TBC Classic) addon that tracks respawn points f
 
 1. Download or clone this repository.
 2. Copy the `HerbTimer` folder into your WoW `Interface/AddOns/` directory.
-3. Make sure the folder structure looks like:
-   ```
-   Interface/AddOns/HerbTimer/
-   ├── HerbTimer.toc
-   ├── HerbTimer.lua
-   ├── HerbTimer.xml
-   └── Libs/
-       ├── LibStub/
-       ├── CallbackHandler-1.0/
-       └── HereBeDragons/
-   ```
+3. Or automaticaly on curse.com
 4. Restart WoW or `/reload`.
 
 **Supported client:** TBC Classic (Interface `20506`).

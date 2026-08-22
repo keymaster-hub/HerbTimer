@@ -53,6 +53,10 @@ local function MigrateDB()
     if HerbTimerDB.maxPointsPerItem == nil then
         HerbTimerDB.maxPointsPerItem = 2
     end
+
+    if HerbTimerDB.maxStoredPointsPerItem == nil then
+        HerbTimerDB.maxStoredPointsPerItem = 10
+    end
 end
 
 MigrateDB()
@@ -88,12 +92,6 @@ end)
 
 local POINT_DISTANCE = 0.01
 
--- Keeps HerbTimerDB.points from growing forever: once an item has more than
--- this many saved points, the oldest ones beyond the cap are dropped whenever
--- a new point for that item is added. This is independent of (and larger
--- than) HerbTimerDB.maxPointsPerItem, which only limits what's *displayed*.
-local HARD_CAP_PER_ITEM = 10
-
 local function FindNearbyPoint(mapID, x, y, itemID)
     for _, point in ipairs(HerbTimerDB.points) do
         if point.mapID == mapID and point.itemID == itemID then
@@ -110,7 +108,13 @@ local function FindNearbyPoint(mapID, x, y, itemID)
     return nil
 end
 
-local function EnforcePointCap(itemID)
+-- Keeps HerbTimerDB.points from growing forever: once an item has more than
+-- HerbTimerDB.maxStoredPointsPerItem saved points, the oldest ones beyond the
+-- cap are dropped. This is independent of (and normally larger than)
+-- HerbTimerDB.maxPointsPerItem, which only limits what's *displayed*.
+-- Configurable in the settings window (default: 10).
+function HT.EnforcePointCap(itemID)
+    local cap = HerbTimerDB.maxStoredPointsPerItem or 10
     local indices = {}
 
     for i, point in ipairs(HerbTimerDB.points) do
@@ -119,7 +123,7 @@ local function EnforcePointCap(itemID)
         end
     end
 
-    if #indices <= HARD_CAP_PER_ITEM then
+    if #indices <= cap then
         return
     end
 
@@ -129,7 +133,7 @@ local function EnforcePointCap(itemID)
 
     -- Remove the oldest entries beyond the cap. Removing from the array in
     -- descending index order keeps the remaining indices valid mid-loop.
-    local toRemove = #indices - HARD_CAP_PER_ITEM
+    local toRemove = #indices - cap
     local removeIndices = {}
     for i = 1, toRemove do
         table.insert(removeIndices, indices[i])
@@ -139,6 +143,23 @@ local function EnforcePointCap(itemID)
     for _, idx in ipairs(removeIndices) do
         table.remove(HerbTimerDB.points, idx)
     end
+end
+
+-- Re-applies the cap to every item currently in the database. Used when the
+-- max-stored setting is lowered in the options window, so existing excess
+-- points are trimmed immediately instead of waiting for the next loot.
+function HT.EnforceAllStoredPointCaps()
+    local itemIDs = {}
+
+    for _, point in ipairs(HerbTimerDB.points) do
+        itemIDs[point.itemID] = true
+    end
+
+    for itemID in pairs(itemIDs) do
+        HT.EnforcePointCap(itemID)
+    end
+
+    HT.BumpPointsVersion()
 end
 
 local frame = CreateFrame("Frame")
@@ -194,7 +215,7 @@ frame:SetScript("OnEvent", function(self, event, msg)
         }
 
         table.insert(HerbTimerDB.points, point)
-        EnforcePointCap(itemID)
+        HT.EnforcePointCap(itemID)
     end
 
     HT.BumpPointsVersion()

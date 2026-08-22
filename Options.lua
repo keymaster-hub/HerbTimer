@@ -5,7 +5,7 @@ local addonName, HT = ...
 --------------------------------------------------
 
 local optionsPanel = CreateFrame("Frame", "HerbTimerOptionsPanel", UIParent, "BackdropTemplate")
-optionsPanel:SetSize(400, 410)
+optionsPanel:SetSize(400, 436)
 optionsPanel:SetPoint("CENTER")
 optionsPanel:SetFrameStrata("DIALOG")
 optionsPanel:SetMovable(true)
@@ -78,8 +78,45 @@ maxPointsBox:SetScript("OnEditFocusLost", function(self)
     end
 end)
 
+local maxStoredLabel = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+maxStoredLabel:SetPoint("TOPLEFT", maxPointsLabel, "BOTTOMLEFT", 0, -12)
+maxStoredLabel:SetText("Max points stored per item")
+
+local maxStoredBox = CreateFrame("EditBox", nil, optionsPanel, "InputBoxTemplate")
+maxStoredBox:SetSize(30, 20)
+maxStoredBox:SetAutoFocus(false)
+maxStoredBox:SetNumeric(true)
+maxStoredBox:SetMaxLetters(2)
+maxStoredBox:SetPoint("LEFT", maxStoredLabel, "RIGHT", 14, 0)
+maxStoredBox:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+end)
+maxStoredBox:SetScript("OnEnterPressed", function(self)
+    self:ClearFocus()
+end)
+maxStoredBox:SetScript("OnEditFocusLost", function(self)
+    local value = tonumber(self:GetText())
+
+    if value and value >= 1 then
+        HerbTimerDB.maxStoredPointsPerItem = math.floor(value)
+        HT.EnforceAllStoredPointCaps() -- trim existing excess immediately if the cap was lowered
+    end
+
+    self:SetText(tostring(HerbTimerDB.maxStoredPointsPerItem))
+
+    if WorldMapFrame:IsShown() then
+        HT.WorldMapDataProvider:RefreshAllData()
+    end
+
+    if HT.RebuildMinimapIcons then
+        HT.RebuildMinimapIcons()
+    end
+
+    HT.RefreshOptionsPanel()
+end)
+
 local timeLabel = optionsPanel:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-timeLabel:SetPoint("TOPLEFT", maxPointsLabel, "BOTTOMLEFT", -2, -20)
+timeLabel:SetPoint("TOPLEFT", maxStoredLabel, "BOTTOMLEFT", 0, -20)
 timeLabel:SetText("Time display")
 
 local clockCheckbox = CreatePanelCheckbox("Clock time (14:32)", timeLabel, -8)
@@ -203,6 +240,10 @@ function HT.RefreshOptionsPanel()
         maxPointsBox:SetText(tostring(HerbTimerDB.maxPointsPerItem or 2))
     end
 
+    if not maxStoredBox:HasFocus() then
+        maxStoredBox:SetText(tostring(HerbTimerDB.maxStoredPointsPerItem or 10))
+    end
+
     local ids = {}
     for itemID in pairs(HerbTimerDB.trackedItems) do
         table.insert(ids, itemID)
@@ -235,7 +276,7 @@ function HT.RefreshOptionsPanel()
         addItemBox:SetPoint("TOPLEFT", itemsLabel, "BOTTOMLEFT", 6, -12)
     end
 
-    local baseHeight = 384 -- everything above the tracked-items rows, plus the add/clear controls and padding
+    local baseHeight = 410 -- everything above the tracked-items rows, plus the add/clear controls and padding
     local rowHeight = 26
     optionsPanel:SetHeight(math.max(baseHeight + visibleCount * rowHeight, 380))
 end

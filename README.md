@@ -14,7 +14,7 @@ A lightweight World of Warcraft (TBC Classic) addon that tracks respawn points f
 - **Standalone settings window** (`/ht options`), plus a shortcut entry in the in-game **Options → AddOns** list.
 
 ## Installation
-https://www.curseforge.com/wow/addons/herbtimer
+[CurseForge](https://www.curseforge.com/wow/addons/herbtimer)
 
 or
 
